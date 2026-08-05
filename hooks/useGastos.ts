@@ -39,18 +39,27 @@ export function useGastos(contextoId: 'personal' | string = 'personal', periodoO
   }, [cargar]);
 
   // Realtime: solo cuando el contexto es un grupo
+  const cargarRef = useRef(cargar);
+  useEffect(() => { cargarRef.current = cargar; }, [cargar]);
+
   useEffect(() => {
     if (contextoId === 'personal') return;
+    const nombreCanal = `gastos-grupo-${contextoId}`;
+    // Eliminar canal previo con el mismo nombre si existe
+    supabase.getChannels()
+      .filter((c) => c.topic === `realtime:${nombreCanal}`)
+      .forEach((c) => supabase.removeChannel(c));
+
     const canal = supabase
-      .channel(`gastos-grupo-${contextoId}`)
+      .channel(nombreCanal)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'expenses', filter: `group_id=eq.${contextoId}` },
-        () => cargar()
+        () => cargarRef.current()
       )
       .subscribe();
     return () => { supabase.removeChannel(canal); };
-  }, [contextoId, cargar]);
+  }, [contextoId]);
 
   const totalGastos = gastosDelMes.filter(g => !g.tipo || g.tipo === 'gasto').reduce((acc, g) => acc + Number(g.amount), 0);
   const totalIngresos = gastosDelMes.filter(g => g.tipo === 'ingreso').reduce((acc, g) => acc + Number(g.amount), 0);

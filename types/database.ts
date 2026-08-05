@@ -68,8 +68,10 @@ export interface Database {
       budgets: {
         Row: {
           id: string;
-          group_id: string;
-          category: Categoria;
+          group_id: string | null;
+          user_id: string | null;
+          name: string;
+          categories: Categoria[];
           amount_limit: number;
           month: string;
           created_at: string;

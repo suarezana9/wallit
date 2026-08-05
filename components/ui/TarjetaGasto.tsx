@@ -1,14 +1,16 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { formatearPeso } from '@/lib/gastos';
+import { formatearFechaRelativa } from '@/lib/gastos';
 import { getCategoriaColor, getCategoriaEmoji } from '@/lib/categorias';
 import { useCategoriaStore } from '@/store/categoriaStore';
+import { useTheme } from '@/constants/theme';
+import { useMoneda } from '@/hooks/useMoneda';
 import type { TipoMovimiento } from '@/types/database';
 
 const CONFIG_TIPO = {
-  ingreso:   { emoji: '💰', color: '#10B981', etiqueta: 'Ingreso' },
-  ahorro:    { emoji: '🏦', color: '#3B82F6', etiqueta: 'Ahorro' },
-  inversion: { emoji: '📈', color: '#F59E0B', etiqueta: 'Inversión' },
-  gasto:     { emoji: null, color: null, etiqueta: null },
+  ingreso:   { emoji: '💰', etiqueta: 'Ingreso'   },
+  ahorro:    { emoji: '🏦', etiqueta: 'Ahorro'    },
+  inversion: { emoji: '📈', etiqueta: 'Inversión' },
+  gasto:     { emoji: null, etiqueta: null         },
 };
 
 interface Props {
@@ -24,49 +26,55 @@ interface Props {
 }
 
 export function TarjetaGasto({ descripcion, categoria, monto, fecha, tipo = 'gasto', fuente, esPrivado, esGrupal, autor }: Props) {
+  const t = useTheme();
+  const { formatear } = useMoneda();
   const config = useCategoriaStore((s) => s.config);
   const esGasto = tipo === 'gasto';
   const cfg = CONFIG_TIPO[tipo];
+  const TIPO_COLOR: Record<string, string> = {
+    gasto: t.text, ingreso: t.tipoIngreso, ahorro: t.tipoAhorro, inversion: t.tipoInversion,
+  };
   const emoji = esGasto ? getCategoriaEmoji(categoria, config) : cfg.emoji!;
-  const color = esGasto ? getCategoriaColor(categoria, config) : cfg.color!;
+  const baseColor = esGasto ? getCategoriaColor(categoria, config) : TIPO_COLOR[tipo];
 
-  const fechaFormateada = new Date(fecha + 'T00:00:00').toLocaleDateString('es-AR', {
-    day: 'numeric',
-    month: 'short',
-  });
+  const fechaFormateada = formatearFechaRelativa(fecha);
 
   const subtitulo = esGasto
-    ? `${categoria} · ${fechaFormateada}${autor ? ` · ${autor}` : ''}`
-    : `${cfg.etiqueta}${fuente ? ` · ${fuente}` : ''} · ${fechaFormateada}${autor ? ` · ${autor}` : ''}`;
+    ? `${categoria} · ${fechaFormateada}`
+    : `${cfg.etiqueta}${fuente ? ` · ${fuente}` : ''} · ${fechaFormateada}`;
+
+  const montoColor = TIPO_COLOR[tipo];
 
   return (
-    <View style={estilos.contenedor}>
-      <View style={[estilos.iconoContenedor, { backgroundColor: color + '20' }]}>
-        <Text style={estilos.emoji}>{emoji}</Text>
+    <View style={styles.contenedor}>
+      <View style={[styles.iconoContenedor, { backgroundColor: baseColor + '18' }]}>
+        <Text style={styles.emoji}>{emoji}</Text>
       </View>
-      <View style={estilos.info}>
-        <View style={estilos.fila}>
-          <Text style={estilos.descripcion} numberOfLines={1}>
+      <View style={styles.info}>
+        <View style={styles.fila}>
+          <Text style={[styles.descripcion, { color: t.text }]} numberOfLines={1}>
             {descripcion || (esGasto ? categoria : cfg.etiqueta)}
           </Text>
-          {esPrivado && <Text style={estilos.privado}>🔒</Text>}
+          {esPrivado && <Text style={styles.privado}>🔒</Text>}
           {esGrupal && (
-            <View style={estilos.badgeGrupo}>
-              <Text style={estilos.badgeGrupoTexto}>👥 Compartido</Text>
+            <View style={[styles.badgeGrupo, { backgroundColor: t.badgeGrupoBg }]}>
+              <Text style={[styles.badgeGrupoTexto, { color: t.badgeGrupoText }]}>
+                👥 {autor ?? 'Compartido'}
+              </Text>
             </View>
           )}
         </View>
-        <Text style={estilos.categoria}>{subtitulo}</Text>
+        <Text style={[styles.categoria, { color: t.textMuted }]}>{subtitulo}</Text>
       </View>
-      <Text style={[estilos.monto, { color }]}>
+      <Text style={[styles.monto, { color: montoColor }]}>
         {!esGasto && '+'}
-        {formatearPeso(monto)}
+        {formatear(monto)}
       </Text>
     </View>
   );
 }
 
-const estilos = StyleSheet.create({
+const styles = StyleSheet.create({
   contenedor: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -76,48 +84,17 @@ const estilos = StyleSheet.create({
   iconoContenedor: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emoji: {
-    fontSize: 20,
-  },
-  info: {
-    flex: 1,
-    gap: 2,
-  },
-  fila: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  descripcion: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
-  privado: {
-    fontSize: 12,
-  },
-  badgeGrupo: {
-    backgroundColor: '#EDE9FE',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeGrupoTexto: {
-    fontSize: 10,
-    color: '#6C47FF',
-    fontWeight: '700',
-  },
-  categoria: {
-    fontSize: 13,
-    color: '#9CA3AF',
-  },
-  monto: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  emoji: { fontSize: 20 },
+  info: { flex: 1, gap: 2 },
+  fila: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  descripcion: { fontSize: 15, fontWeight: '600', flex: 1 },
+  privado: { fontSize: 12 },
+  badgeGrupo: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  badgeGrupoTexto: { fontSize: 10, fontWeight: '700' },
+  categoria: { fontSize: 13 },
+  monto: { fontSize: 15, fontWeight: '700', letterSpacing: -0.3 },
 });

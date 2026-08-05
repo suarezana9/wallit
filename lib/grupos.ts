@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { enviarPushExpo } from './notificaciones';
 
 export async function crearGrupo(nombre: string, userId: string) {
   // Insertar sin select para evitar que la policy de SELECT bloquee antes de agregar al miembro
@@ -49,7 +50,29 @@ export async function unirseAGrupo(codigo: string, userId: string) {
     .insert({ group_id: grupo.id, user_id: userId, role: 'member' });
 
   if (errUnirse) throw errUnirse;
+
+  // Notificar al admin del grupo (sin bloquear si falla)
+  try {
+    const [{ data: tokenData }, { data: nuevoMiembro }] = await Promise.all([
+      supabase.rpc('obtener_admin_push_token', { p_group_id: grupo.id }),
+      supabase.from('users').select('name').eq('id', userId).single(),
+    ]);
+    const nombre = nuevoMiembro?.name ?? 'Alguien';
+    if (tokenData) {
+      await enviarPushExpo(tokenData, `${nombre} se unió a ${grupo.name}`, 'Nuevo integrante en tu grupo 🎉');
+    }
+  } catch {
+    // Silencioso
+  }
+
   return grupo;
+}
+
+export async function buscarGrupoPorCodigo(codigo: string) {
+  const { data, error } = await supabase
+    .rpc('buscar_grupo_por_codigo', { p_codigo: codigo.trim() });
+  if (error || !data?.[0]) throw new Error('Código inválido.');
+  return data[0] as { id: string; name: string; invite_code: string };
 }
 
 export async function obtenerMisGrupos(userId: string) {
@@ -98,6 +121,24 @@ export async function cerrarGrupo(grupoId: string, userId: string) {
     .from('group_members')
     .delete()
     .eq('group_id', grupoId);
+
+  if (error) throw error;
+}
+
+export async function renombrarGrupo(grupoId: string, userId: string, nuevoNombre: string) {
+  const { data: miembro } = await supabase
+    .from('group_members')
+    .select('role')
+    .eq('group_id', grupoId)
+    .eq('user_id', userId)
+    .single();
+
+  if ((miembro as any)?.role !== 'admin') throw new Error('Solo el admin puede renombrar el grupo.');
+
+  const { error } = await supabase
+    .from('groups')
+    .update({ name: nuevoNombre.trim() })
+    .eq('id', grupoId);
 
   if (error) throw error;
 }

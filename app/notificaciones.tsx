@@ -7,32 +7,43 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { registrarPushToken } from '@/lib/notificaciones';
+import { useTheme } from '@/constants/theme';
 
 interface NotifConfig {
   sin_actividad: boolean;
+  sin_actividad_prolongada: boolean;
   inicio_mes: boolean;
   cierre_mes: boolean;
+  presupuesto_80: boolean;
   gasto_grupo: boolean;
   balance_negativo: boolean;
+  racha_positiva: boolean;
 }
 
 const CONFIG_DEFAULT: NotifConfig = {
   sin_actividad: true,
+  sin_actividad_prolongada: true,
   inicio_mes: true,
   cierre_mes: true,
+  presupuesto_80: true,
   gasto_grupo: true,
   balance_negativo: true,
+  racha_positiva: true,
 };
 
 const OPCIONES: { key: keyof NotifConfig; emoji: string; titulo: string; descripcion: string }[] = [
-  { key: 'sin_actividad',    emoji: '💤', titulo: 'Sin actividad',    descripcion: 'Recordatorio si no cargás nada en 3 o 7 días' },
-  { key: 'inicio_mes',       emoji: '🗓️', titulo: 'Inicio de mes',    descripcion: 'Aviso el día 2 para cargar ingresos' },
-  { key: 'cierre_mes',       emoji: '📅', titulo: 'Cierre de mes',    descripcion: 'Recordatorio los últimos días del mes' },
-  { key: 'gasto_grupo',      emoji: '👥', titulo: 'Gastos en grupo',  descripcion: 'Alerta cuando alguien carga un gasto grande' },
-  { key: 'balance_negativo', emoji: '🔴', titulo: 'Balance negativo', descripcion: 'Aviso cuando los gastos superan los ingresos' },
+  { key: 'sin_actividad',           emoji: '💤', titulo: 'Sin actividad',         descripcion: 'Recordatorio si no cargás nada en 3 días' },
+  { key: 'sin_actividad_prolongada',emoji: '😴', titulo: 'Inactividad prolongada', descripcion: 'Aviso si llevás 7 días sin registrar nada' },
+  { key: 'inicio_mes',              emoji: '🗓️', titulo: 'Inicio de mes',          descripcion: 'Aviso el día 2 para cargar ingresos del mes' },
+  { key: 'cierre_mes',              emoji: '📅', titulo: 'Cierre de mes',          descripcion: 'Recordatorio los últimos días para cerrar el mes' },
+  { key: 'presupuesto_80',          emoji: '⚠️', titulo: 'Presupuesto al límite',  descripcion: 'Alerta cuando una categoría supera el 80% del presupuesto' },
+  { key: 'gasto_grupo',             emoji: '👥', titulo: 'Gastos en grupo',        descripcion: 'Alerta cuando alguien carga un gasto grande en tu grupo' },
+  { key: 'balance_negativo',        emoji: '🔴', titulo: 'Balance negativo',       descripcion: 'Aviso cuando los gastos del mes superan los ingresos' },
+  { key: 'racha_positiva',          emoji: '🔥', titulo: 'Racha positiva',         descripcion: '¡Celebramos cuando llevás 7 días seguidos registrando!' },
 ];
 
 export default function PantallaNotificaciones() {
+  const t = useTheme();
   const router = useRouter();
   const usuario = useAuthStore((s) => s.usuario);
 
@@ -74,102 +85,106 @@ export default function PantallaNotificaciones() {
     }
   }
 
+  const s = makeStyles(t);
+
   return (
-    <View style={estilos.pagina}>
-      {/* Header */}
-      <View style={estilos.header}>
+    <View style={s.pagina}>
+      <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
-          <Text style={estilos.botonVolver}>‹ Volver</Text>
+          <Text style={s.botonVolver}>‹ Volver</Text>
         </TouchableOpacity>
-        <Text style={estilos.titulo}>Notificaciones</Text>
+        <Text style={s.titulo}>Notificaciones</Text>
         {guardando
-          ? <ActivityIndicator color="#6C47FF" style={{ width: 60 }} />
+          ? <ActivityIndicator color={t.primary} style={{ width: 60 }} />
           : <View style={{ width: 60 }} />
         }
       </View>
 
-      <ScrollView contentContainerStyle={estilos.contenido}>
-        <View style={estilos.seccion}>
+      <ScrollView contentContainerStyle={s.contenido}>
+        {!tienePushToken && !cargando && (
+          <TouchableOpacity style={s.botonActivar} onPress={activar} activeOpacity={0.8}>
+            <Text style={s.textoActivar}>🔔 Activar notificaciones</Text>
+          </TouchableOpacity>
+        )}
 
-          {/* Botón activar (solo si no hay push token) */}
-          {!tienePushToken && !cargando && (
-            <TouchableOpacity style={estilos.botonActivar} onPress={activar} activeOpacity={0.8}>
-              <Text style={estilos.textoActivar}>🔔 Activar notificaciones</Text>
-            </TouchableOpacity>
-          )}
+        {tienePushToken && (
+          <View style={s.badgeActivo}>
+            <Text style={s.textoBadge}>✅ Notificaciones activadas</Text>
+          </View>
+        )}
 
-          {tienePushToken && (
-            <View style={estilos.badgeActivo}>
-              <Text style={estilos.textoBadge}>✅ Notificaciones activadas</Text>
-            </View>
-          )}
-
-          {/* Toggles */}
+        <View style={s.seccion}>
           {cargando ? (
-            <ActivityIndicator color="#6C47FF" style={{ marginVertical: 20 }} />
+            <ActivityIndicator color={t.primary} style={{ marginVertical: 20 }} />
           ) : (
             OPCIONES.map((op, i) => (
               <View key={op.key}>
-                {i > 0 && <View style={estilos.divisor} />}
-                <View style={estilos.fila}>
-                  <Text style={estilos.filaEmoji}>{op.emoji}</Text>
+                {i > 0 && <View style={s.divisor} />}
+                <View style={s.fila}>
+                  <Text style={s.filaEmoji}>{op.emoji}</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={estilos.filaTitulo}>{op.titulo}</Text>
-                    <Text style={estilos.filaDesc}>{op.descripcion}</Text>
+                    <Text style={s.filaTitulo}>{op.titulo}</Text>
+                    <Text style={s.filaDesc}>{op.descripcion}</Text>
                   </View>
                   <Switch
                     value={config[op.key]}
                     onValueChange={() => toggle(op.key)}
-                    trackColor={{ true: '#6C47FF', false: '#E5E7EB' }}
-                    thumbColor="#fff"
+                    trackColor={{ true: t.primary, false: t.border }}
+                    thumbColor={t.surface}
                     disabled={!tienePushToken}
                   />
                 </View>
               </View>
             ))
           )}
-
-          {tienePushToken && (
-            <Text style={estilos.nota}>Las notificaciones se envían a las 9am hora Argentina.</Text>
-          )}
         </View>
+
+        {tienePushToken && (
+          <Text style={s.nota}>Las notificaciones se envían a las 9am (hora Argentina).</Text>
+        )}
+        {!tienePushToken && !cargando && (
+          <Text style={s.nota}>Activá las notificaciones para configurar cada alerta.</Text>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-const estilos = StyleSheet.create({
-  pagina: { flex: 1, backgroundColor: '#F9FAFB' },
+function makeStyles(t: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
+    pagina: { flex: 1, backgroundColor: t.bg },
 
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
-  },
-  botonVolver: { fontSize: 16, color: '#6C47FF', fontWeight: '600', width: 60 },
-  titulo: { fontSize: 17, fontWeight: '700', color: '#111827' },
+    header: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16,
+      backgroundColor: t.surface, borderBottomWidth: 1, borderBottomColor: t.border,
+    },
+    botonVolver: { fontSize: 16, color: t.primary, fontWeight: '600', width: 60 },
+    titulo: { fontSize: 17, fontWeight: '700', color: t.text },
 
-  contenido: { padding: 20, paddingBottom: 48 },
+    contenido: { padding: 20, paddingBottom: 48, gap: 12 },
 
-  seccion: { backgroundColor: '#fff', borderRadius: 16, padding: 20, gap: 4 },
+    botonActivar: {
+      backgroundColor: t.primary, borderRadius: 14,
+      padding: 16, alignItems: 'center',
+    },
+    textoActivar: { color: t.heroText, fontWeight: '700', fontSize: 15 },
 
-  botonActivar: {
-    backgroundColor: '#6C47FF', borderRadius: 12,
-    padding: 14, alignItems: 'center', marginBottom: 16,
-  },
-  textoActivar: { color: '#fff', fontWeight: '700', fontSize: 14 },
+    badgeActivo: {
+      backgroundColor: t.accentBg, borderRadius: 10,
+      paddingHorizontal: 14, paddingVertical: 10,
+      alignSelf: 'flex-start',
+    },
+    textoBadge: { fontSize: 13, color: t.positive, fontWeight: '600' },
 
-  badgeActivo: {
-    backgroundColor: '#F0FDF4', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 8,
-    alignSelf: 'flex-start', marginBottom: 12,
-  },
-  textoBadge: { fontSize: 13, color: '#10B981', fontWeight: '600' },
+    seccion: { backgroundColor: t.surface, borderRadius: 16, padding: 20, gap: 4 },
 
-  divisor: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 2 },
-  fila: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
-  filaEmoji: { fontSize: 20, width: 28, textAlign: 'center' },
-  filaTitulo: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  filaDesc: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-  nota: { fontSize: 11, color: '#D1D5DB', textAlign: 'center', marginTop: 12 },
-});
+    divisor: { height: 1, backgroundColor: t.border, marginVertical: 2 },
+    fila: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
+    filaEmoji: { fontSize: 20, width: 28, textAlign: 'center' },
+    filaTitulo: { fontSize: 14, fontWeight: '600', color: t.text },
+    filaDesc: { fontSize: 12, color: t.textMuted, marginTop: 2 },
+
+    nota: { fontSize: 12, color: t.textMuted, textAlign: 'center' },
+  });
+}

@@ -37,6 +37,19 @@ export async function registrarPushToken(userId: string): Promise<void> {
   }
 }
 
+export async function enviarPushExpo(token: string, title: string, body: string): Promise<void> {
+  if (!token?.startsWith('ExponentPushToken')) return;
+  try {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ to: token, title, body, sound: 'default' }),
+    });
+  } catch {
+    // Silencioso — no crítico si la notif no llega
+  }
+}
+
 export function configurarHandlerForeground() {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
